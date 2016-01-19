@@ -60,7 +60,9 @@ RUN update-rc.d -f freeswitch defaults
 ADD sysv/default /etc/default/freeswitch
 
 # Add the freeswitch user.
-RUN adduser --gecos "FreeSWITCH Voice Platform" --no-create-home --disabled-login --disabled-password --system --ingroup daemon --home /usr/local/freeswitch freeswitch
+RUN adduser --gecos "FreeSWITCH Voice Platform" --no-create-home --disabled-login --disabled-password \
+            --system --ingroup daemon --home /usr/local/freeswitch freeswitch
+            
 RUN chown -R freeswitch:daemon /usr/local/freeswitch
 
 # Create the log file.
