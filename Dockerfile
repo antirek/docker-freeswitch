@@ -2,26 +2,67 @@ FROM ubuntu:14.04.3
 
 MAINTAINER Sergey Dmitriev <serge.dmitriev@gmail.com>
 
-ENV FS_MAJOR 1.6
-ENV FS_VERSION 1.6.6
 
+# Enable the Ubuntu multiverse repository.
+RUN echo "deb http://us.archive.ubuntu.com/ubuntu/ trusty multiverse" >> /etc/apt/source.list
+RUN echo "deb-src http://us.archive.ubuntu.com/ubuntu/ trusty multiverse">> /etc/apt/source.list
+RUN echo "deb http://us.archive.ubuntu.com/ubuntu/ trusty-updates multiverse" >> /etc/apt/source.list
+RUN echo "deb-src http://us.archive.ubuntu.com/ubuntu/ trusty-updates multiverse" >> /etc/apt/source.list
+
+# Install Dependencies.
 RUN apt-get update && \
-    apt-get -y --quiet --force-yes upgrade \
-    && apt-get install -y --quiet --force-yes locales curl wget libvorbis0a \
-                        libogg0 libsqlite3-0 libpcre3 libspeex1 libspeexdsp1 \
-                        libedit2 libjpeg62-turbo librabbitmq1 \
-    && curl http://files.freeswitch.org/repo/deb/debian/freeswitch_archive_g0.pub | apt-key add - \
-    && echo "deb http://files.freeswitch.org/repo/deb/freeswitch-1.6/ jessie main" > /etc/apt/sources.list.d/freeswitch.list \
-    && gpg --keyserver pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-    && curl -o /usr/local/bin/gosu -SL "https://github.com/tianon/gosu/releases/download/1.7/gosu-$(dpkg --print-architecture)" \
-    && curl -o /usr/local/bin/gosu.asc -SL "https://github.com/tianon/gosu/releases/download/1.7/gosu-$(dpkg --print-architecture).asc" \
-    && gpg --verify /usr/local/bin/gosu.asc \
-    && rm /usr/local/bin/gosu.asc \
-    && chmod +x /usr/local/bin/gosu \
-    && localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 \
-    && apt-get update && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    apt-get install -y autoconf automake bison build-essential fail2ban gawk git-core groff \ 
+                    groff-base erlang-dev libasound2-dev libavcodec-dev libavutil-dev libavformat-dev \
+                    liba52-0.7.4-dev libdb-dev libexpat1-dev libcurl4-openssl-dev libgdbm-dev libgnutls-dev \
+                    libjpeg-dev libmp3lame-dev libncurses5 libncurses5-dev libperl-dev libogg-dev \
+                    libsnmp-dev libssl-dev libtiff4-dev libtool libvorbis-dev libx11-dev libzrtpcpp-dev \
+                    make portaudio19-dev python-dev snmp snmpd subversion unixodbc-dev uuid-dev zlib1g-dev \
+                    libsqlite3-dev libpcre3-dev libspeex-dev libspeexdsp-dev libldns-dev libedit-dev \
+                    libladspa-ocaml-dev libmemcached-dev libmp4v2-dev libmyodbc libpq-dev libvlc-dev \
+                    libv8-dev liblua5.2-dev libyaml-dev libpython-dev odbc-postgresql sendmail unixodbc \
+                    wget yasm
 
-ENV LANG en_US.utf8
+# Use Gawk.
+RUN update-alternatives --set awk /usr/bin/gawk
 
-RUN groupadd -r freeswitch && useradd -r -g freeswitch freeswitch
+# Install source code dependencies.
+ADD build/install-deps.sh /root/install-deps.sh
+WORKDIR /root
+RUN chmod +x install-deps.sh
+RUN ./install-deps.sh
+RUN rm install-deps.sh
+
+
+# Download FreeSWITCH.
+WORKDIR /usr/src
+ENV GIT_SSL_NO_VERIFY=1
+RUN git clone https://freeswitch.org/stash/scm/fs/freeswitch.git -b v1.6.5
+
+# Bootstrap the build.
+WORKDIR freeswitch
+RUN ./bootstrap.sh
+
+# Enable the desired modules.
+ADD build/modules.conf /usr/src/freeswitch/modules.conf
+
+# Build FreeSWITCH.
+RUN ./configure --enable-core-pgsql-support
+RUN make
+RUN make install
+RUN make uhd-sounds-install
+RUN make uhd-moh-install
+RUN make samples
+
+# Post install configuration.
+ADD sysv/init /etc/init.d/freeswitch
+RUN chmod +x /etc/init.d/freeswitch
+RUN update-rc.d -f freeswitch defaults
+ADD sysv/default /etc/default/freeswitch
+
+# Add the freeswitch user.
+RUN adduser --gecos "FreeSWITCH Voice Platform" --no-create-home --disabled-login --disabled-password --system --ingroup daemon --home /usr/local/freeswitch freeswitch
+RUN chown -R freeswitch:daemon /usr/local/freeswitch
+
+# Create the log file.
+RUN touch /usr/local/freeswitch/log/freeswitch.log
+RUN chown freeswitch:daemon /usr/local/freeswitch/log/freeswitch.log
