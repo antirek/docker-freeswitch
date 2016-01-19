@@ -1,0 +1,5 @@
+#!/bin/bash
+
+docker run  \
+    -v $(pwd)/store/freeswitch/conf:/usr/local/freeswitch/conf \
+    antirek/freeswitch

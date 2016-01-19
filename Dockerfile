@@ -66,3 +66,5 @@ RUN chown -R freeswitch:daemon /usr/local/freeswitch
 # Create the log file.
 RUN touch /usr/local/freeswitch/log/freeswitch.log
 RUN chown freeswitch:daemon /usr/local/freeswitch/log/freeswitch.log
+
+CMD service snmpd start && service freeswitch start && tail -f /usr/local/freeswitch/log/freeswitch.log
