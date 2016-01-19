@@ -2,4 +2,5 @@
 
 docker run  \
     -v $(pwd)/store/freeswitch/conf:/usr/local/freeswitch/conf \
+    --net=host \
     antirek/freeswitch
